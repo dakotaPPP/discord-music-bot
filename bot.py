@@ -9,6 +9,7 @@ currentUrl = ""
 songIndex = 0
 queues = {}
 urls = {}
+loop = 0
 
 def check_queue(ctx,id):
   global currentUrl, songIndex
@@ -122,6 +123,19 @@ class bot(commands.Cog):
       await ctx.send(f"Your queue is now `{queues[guild_id]}`")
     else: 
       await ctx.send("The queue is empty! Add some tracks!")
+
+  @commands.command()
+  async def loop(self,ctx):
+    global loop
+    if loop==0:
+      loop=1
+      await ctx.send("Now looping queue!")
+    elif loop==1:
+      loop=2
+      await ctx.send("Now looping current track!")
+    else:
+      loop=0
+      await ctx.send("No longer looping!")
  
   #pauses the current stream of audio and sends message alerting user
   @commands.command()
