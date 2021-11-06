@@ -4,7 +4,7 @@ import os
 import youtube_dl
 import bot
 
-
+BOTTOKEN = os.environ['BOTTOKEN']
 #defines our cogs
 cogs = [bot]
 
@@ -25,4 +25,4 @@ async def embed(ctx):
 
 
 
-client.run("OTAwNzk0MzI1NTkwNDc0NzUz.YXGgFw._3O-vsdfQkZkj2A5gQLoyMDVkDk")
+client.run(BOTTOKEN)

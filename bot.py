@@ -24,6 +24,8 @@ def check_queue(ctx,id):
         ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
         songIndex+=1
     except:
+      #you get an audio already playing error if you use -play function while a song is currently playing
+      #this error doesn't actually affect the bot it just clogs up console so I added this try: except: statement to catch the error
       print("audio alread playing lel")
     
       
