@@ -42,6 +42,7 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
+    await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
   #another way to call the dc command
@@ -52,6 +53,7 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
+    await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
     #adds songs to the queue 
@@ -73,7 +75,6 @@ class bot(commands.Cog):
     #youtube dl config that gets the best audio to stream
     ydl_cfg = {"format":"bestaudio"}
 
-
     guild_id = ctx.message.guild.id
 
     if not url.startswith("https://"):
@@ -82,8 +83,9 @@ class bot(commands.Cog):
       html = urllib.request.urlopen("https://www.youtube.com/results?search_query="+url)
       video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
       url = "https://www.youtube.com/watch?v="+video_ids[0]
-      #source
-    
+
+    #adds reaction to message sent by user to show that the bot acknowledges their request
+    await ctx.message.add_reaction("▶")    
     await ctx.send(f"`{url}` added to queue!")
     
     with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
@@ -103,8 +105,8 @@ class bot(commands.Cog):
           queues[guild_id].append(source)
         else:
           queues[guild_id] = [source]
+        check_queue(ctx, guild_id)    
         
-        check_queue(ctx, guild_id)          
   
   #remove a track from a specified index in the queue
   @commands.command()
@@ -126,23 +128,9 @@ class bot(commands.Cog):
     else: 
       await ctx.send("The queue is empty! Add some tracks!")
 
-  @commands.command()
-  async def loop(self,ctx):
-    global loop
-    if loop==0:
-      loop=1
-      await ctx.send("Now looping queue!")
-    elif loop==1:
-      loop=2
-      await ctx.send("Now looping current track!")
-    else:
-      loop=0
-      await ctx.send("No longer looping!")
- 
   #pauses the current stream of audio and sends message alerting user
   @commands.command()
   async def pause(self,ctx):
-    print(currentUrl)
     data = scrape_info(currentUrl)
     pauseembed=discord.Embed(title="Track Paused",description= data)
     await ctx.send(embed=pauseembed)  
@@ -156,6 +144,24 @@ class bot(commands.Cog):
     resumeembed=discord.Embed(title="Track Resumed",description= data)
     await ctx.send(embed=resumeembed)
     await ctx.voice_client.resume()    
+
+  #skips the current song playing
+  @commands.command()
+  async def skip(self,ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+      ctx.voice_client.stop()
+      await ctx.send("Skipped current track!")
+    else:
+      await ctx.send("There is currently no music playing!")
+
+  @commands.command()
+  async def shuffle(self,ctx):
+    guild_id = ctx.message.guild.id
+    if len(queues[guild_id]) != songIndex:
+      await ctx.message.add_reaction("🔀")
+      await ctx.send("The queue has been shuffled!")
+    else: 
+      await ctx.send("The queue is empty! Add some tracks!")
 
 #Scraping for the song info   
 def scrape_info(url):
