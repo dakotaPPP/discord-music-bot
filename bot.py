@@ -18,10 +18,9 @@ def check_queue(ctx,id):
       if songIndex != (len(queues[id])):
         source = queues[id][songIndex]
         currentUrl = urls[id][songIndex]
-        print(urls)
-        print(currentUrl)
         #streams the FFmpeg stream to the bot's current vc
         ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
+        print(urls[id][songIndex])
         songIndex+=1
     except:
       #you get an audio already playing error if you use -play function while a song is currently playing
@@ -42,6 +41,7 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
+    loop = 0
     await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
@@ -53,6 +53,7 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
+    loop = 0
     await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
@@ -86,6 +87,7 @@ class bot(commands.Cog):
 
     #adds reaction to message sent by user to show that the bot acknowledges their request
        
+    await ctx.message.add_reaction("▶")
     await ctx.send(f"`{url}` added to queue!")
     
     with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
@@ -166,11 +168,40 @@ class bot(commands.Cog):
   async def shuffle(self,ctx):
     guild_id = ctx.message.guild.id
     if len(queues[guild_id]) != songIndex:
+      #creates a temp list that holds all the songs that are coming up in the queue
+      tempL = []
+      tempIndex = songIndex
+      while tempIndex != len(queues[guild_id]):
+        tempL.append(queues[guild_id][tempIndex])
+        tempIndex+=1
+      #shuffles our temp list
+      random.shuffle(tempL)
+      #replaces elements in our current queue playing with our now shuffled temp list of our queue
+      tempIndex = songIndex
+      for i in tempL:
+        queues[guild_id][tempIndex]=tempL[i]
+        tempIndex+=1
       await ctx.message.add_reaction("🔀")
       await ctx.send("The queue has been shuffled!")
     else: 
       await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
+
+  @commands.command()
+  async def loop(self,ctx):
+    global loop
+    if loop==0:
+      loop=1
+      await ctx.message.add_reaction("🔁")
+      await ctx.send("Now looping queue!")
+    elif loop==1:
+      loop=2
+      await ctx.message.add_reaction("🔂")
+      await ctx.send("Now looping current track!")
+    elif loop==2:
+      loop=0
+      await ctx.message.add_reaction("▶")
+      await ctx.send("No longer looping queue!")
 
 #Scraping for the song info   
 def scrape_info(url):
