@@ -85,7 +85,7 @@ class bot(commands.Cog):
       url = "https://www.youtube.com/watch?v="+video_ids[0]
 
     #adds reaction to message sent by user to show that the bot acknowledges their request
-    await ctx.message.add_reaction("▶")    
+       
     await ctx.send(f"`{url}` added to queue!")
     
     with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
@@ -115,8 +115,10 @@ class bot(commands.Cog):
     #attemps to remove the song from the specified index
     try:
       queues[guild_id].pop(songIndex+number-1)
+      await ctx.message.add_reaction("👍")
       await ctx.send(f"Your queue is now `{queues[guild_id]}`")
     except:
+      await ctx.message.add_reaction("🖕")
       await ctx.send("**Invalid track number**")
   
   #view the current queue
@@ -124,8 +126,10 @@ class bot(commands.Cog):
   async def queue(self,ctx):
     guild_id = ctx.message.guild.id
     if len(queues[guild_id]) != songIndex:
+      await ctx.message.add_reaction("👍")
       await ctx.send(f"Your queue is now `{queues[guild_id]}`")
     else: 
+      await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
 
   #pauses the current stream of audio and sends message alerting user
@@ -133,6 +137,7 @@ class bot(commands.Cog):
   async def pause(self,ctx):
     data = scrape_info(currentUrl)
     pauseembed=discord.Embed(title="Track Paused",description= data)
+    await ctx.message.add_reaction("⏸")
     await ctx.send(embed=pauseembed)  
     await ctx.voice_client.pause() 
       
@@ -142,6 +147,7 @@ class bot(commands.Cog):
   async def resume(self,ctx):
     data = scrape_info(currentUrl)
     resumeembed=discord.Embed(title="Track Resumed",description= data)
+    await ctx.message.add_reaction("⏯")
     await ctx.send(embed=resumeembed)
     await ctx.voice_client.resume()    
 
@@ -150,8 +156,10 @@ class bot(commands.Cog):
   async def skip(self,ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
       ctx.voice_client.stop()
+      await ctx.message.add_reaction("⏭")
       await ctx.send("Skipped current track!")
     else:
+      await ctx.message.add_reaction("🖕")
       await ctx.send("There is currently no music playing!")
 
   @commands.command()
@@ -161,6 +169,7 @@ class bot(commands.Cog):
       await ctx.message.add_reaction("🔀")
       await ctx.send("The queue has been shuffled!")
     else: 
+      await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
 
 #Scraping for the song info   
