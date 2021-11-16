@@ -4,6 +4,7 @@ import youtube_dl
 from bs4 import BeautifulSoup
 import requests
 import urllib.parse, urllib.request, re
+import random
 currentUrl = ""
 
 songIndex = 0
@@ -20,7 +21,6 @@ def check_queue(ctx,id):
         currentUrl = urls[id][songIndex]
         #streams the FFmpeg stream to the bot's current vc
         ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
-        print(urls[id][songIndex])
         songIndex+=1
     except:
       #you get an audio already playing error if you use -play function while a song is currently playing
@@ -179,7 +179,7 @@ class bot(commands.Cog):
       #replaces elements in our current queue playing with our now shuffled temp list of our queue
       tempIndex = songIndex
       for i in tempL:
-        queues[guild_id][tempIndex]=tempL[i]
+        queues[guild_id][tempIndex]=i
         tempIndex+=1
       await ctx.message.add_reaction("🔀")
       await ctx.send("The queue has been shuffled!")
