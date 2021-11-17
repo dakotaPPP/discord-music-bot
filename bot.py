@@ -1,33 +1,17 @@
 import discord
 from discord.ext import commands
 import youtube_dl
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup as bs
 import requests
+from requests_html import HTMLSession 
 import urllib.parse, urllib.request, re
 import random
-currentUrl = ""
 
+currentUrl = ""
 songIndex = 0
 queues = {}
 urls = {}
-loop = 0
-
-def check_queue(ctx,id):
-  global currentUrl, songIndex
-  if queues[id]!=[]:
-    try:
-      if songIndex != (len(queues[id])):
-        source = queues[id][songIndex]
-        currentUrl = urls[id][songIndex]
-        #streams the FFmpeg stream to the bot's current vc
-        ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
-        songIndex+=1
-    except:
-      #you get an audio already playing error if you use -play function while a song is currently playing
-      #this error doesn't actually affect the bot it just clogs up console so I added this try: except: statement to catch the error
-      print("audio alread playing lel")
-    
-      
+          
     
 class bot(commands.Cog):
   def __init__(self, client): 
@@ -41,7 +25,6 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
-    loop = 0
     await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
@@ -53,7 +36,6 @@ class bot(commands.Cog):
     queues[guild_id].clear()
     urls[guild_id].clear()
     songIndex = 0
-    loop = 0
     await ctx.message.add_reaction("👋")
     await ctx.voice_client.disconnect()
 
@@ -108,7 +90,6 @@ class bot(commands.Cog):
         else:
           queues[guild_id] = [source]
         check_queue(ctx, guild_id)    
-        
   
   #remove a track from a specified index in the queue
   @commands.command()
@@ -137,21 +118,21 @@ class bot(commands.Cog):
   #pauses the current stream of audio and sends message alerting user
   @commands.command()
   async def pause(self,ctx):
-    data = scrape_info(currentUrl)
-    pauseembed=discord.Embed(title="Track Paused",description= data)
+    data = scrape(currentUrl)
+    pauseembed=discord.Embed(title="Track Paused",description=data)
     await ctx.message.add_reaction("⏸")
     await ctx.send(embed=pauseembed)  
-    await ctx.voice_client.pause() 
+    ctx.voice_client.pause() 
       
 
   #resumes the current stream of audio and sends message alerting user
   @commands.command()
   async def resume(self,ctx):
-    data = scrape_info(currentUrl)
-    resumeembed=discord.Embed(title="Track Resumed",description= data)
+    
+    resumeembed=discord.Embed(title="Track Resumed",description= "")
     await ctx.message.add_reaction("⏯")
     await ctx.send(embed=resumeembed)
-    await ctx.voice_client.resume()    
+    ctx.voice_client.resume()    
 
   #skips the current song playing
   @commands.command()
@@ -159,10 +140,12 @@ class bot(commands.Cog):
     if ctx.voice_client and ctx.voice_client.is_playing():
       ctx.voice_client.stop()
       await ctx.message.add_reaction("⏭")
-      await ctx.send("Skipped current track!")
+      skipembed=discord.Embed(title="Track Skipped",description= "")
+      await ctx.send(embed=skipembed)
     else:
       await ctx.message.add_reaction("🖕")
-      await ctx.send("There is currently no music playing!")
+      nosongembed=discord.Embed(title="No Song Found",description= "There are currently no songs in queue!")
+      await ctx.send(embed=nosongembed)
 
   @commands.command()
   async def shuffle(self,ctx):
@@ -171,6 +154,7 @@ class bot(commands.Cog):
       #creates a temp list that holds all the songs that are coming up in the queue
       tempL = []
       tempIndex = songIndex
+      print(queues[guild_id])
       while tempIndex != len(queues[guild_id]):
         tempL.append(queues[guild_id][tempIndex])
         tempIndex+=1
@@ -183,41 +167,46 @@ class bot(commands.Cog):
         tempIndex+=1
       await ctx.message.add_reaction("🔀")
       await ctx.send("The queue has been shuffled!")
+      print(queues[guild_id])
     else: 
       await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
 
-  @commands.command()
-  async def loop(self,ctx):
-    global loop
-    if loop==0:
-      loop=1
-      await ctx.message.add_reaction("🔁")
-      await ctx.send("Now looping queue!")
-    elif loop==1:
-      loop=2
-      await ctx.message.add_reaction("🔂")
-      await ctx.send("Now looping current track!")
-    elif loop==2:
-      loop=0
-      await ctx.message.add_reaction("▶")
-      await ctx.send("No longer looping queue!")
+  #@commands.command()
+  #async def lyrics(self,ctx):
 
-#Scraping for the song info   
-def scrape_info(url):
-      
-    # getting the request from url
-    r = requests.get(url)
-      
-    # converting the text
-    s = BeautifulSoup(r.text, "html.parser")
-      
-    # finding meta info for title
-    title = s.find("span", class_="watch-title").text.replace("\n", "")
-    
-    #store other data here
-    data = {'title':title}
-    return data
+#helper function that goes through the queue one song after another
+def check_queue(ctx,id):
+  global currentUrl, songIndex
+  if queues[id]!=[]:
+    try:
+      if songIndex != (len(queues[id])):
+        source = queues[id][songIndex]
+        currentUrl = urls[id][songIndex]
+        #streams the FFmpeg stream to the bot's current vc
+        ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
+        songIndex+=1
+    except:
+      #you get an audio already playing error if you use -play function while a song is currently playing
+      #this error doesn't actually affect the bot it just clogs up console so I added this try: except: statement to catch the error
+      print("audio alread playing lel")
+
+
+def scrape(url):
+  session = HTMLSession()
+# get the html content
+  response = session.get(url)
+# execute Java-script
+  response.html.render(sleep=1)
+# create bs object to parse HTML
+  soup = bs(response.html.html, "html.parser")
+  result = {}
+
+  result["title"] = soup.find("meta", itemprop="name")['content']
+  print(result)
+  
+
+
 
 def setup(client):
   client.add_cog(bot(client))
