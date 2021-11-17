@@ -1,11 +1,12 @@
 import discord
 from discord.ext import commands
 import youtube_dl
-from bs4 import BeautifulSoup as bs
+from bs4 import BeautifulSoup
 import requests
-from requests_html import HTMLSession 
 import urllib.parse, urllib.request, re
 import random
+guaTOKEN = os.environ['guaguaTOKEN']
+
 
 currentUrl = ""
 songIndex = 0
@@ -172,8 +173,15 @@ class bot(commands.Cog):
       await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
 
-  #@commands.command()
-  #async def lyrics(self,ctx):
+  @commands.command()
+  async def lyrics(self,ctx):
+    data = scrape(currentUrl)
+
+    search_term = data['title'][len(data['title'])-1]
+    html = urllib.request.urlopen("https://genius.com/search?q="+search_term)
+    video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+    url = "https://www.youtube.com/watch?v="+video_ids[0]
+    
 
 #helper function that goes through the queue one song after another
 def check_queue(ctx,id):
@@ -193,17 +201,10 @@ def check_queue(ctx,id):
 
 
 def scrape(url):
-  session = HTMLSession()
-# get the html content
-  response = session.get(url)
-# execute Java-script
-  response.html.render(sleep=1)
-# create bs object to parse HTML
-  soup = bs(response.html.html, "html.parser")
-  result = {}
-
-  result["title"] = soup.find("meta", itemprop="name")['content']
-  print(result)
+  r = BeautifulSoup(requests.get(url).text, "html.parser")
+  title = r.select_one('meta[itemprop="name"][content]')['content']
+  data = {'title':title}
+  return data
   
 
 
