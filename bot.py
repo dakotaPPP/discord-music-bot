@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import requests
 import urllib.parse, urllib.request, re
 import random
-guaTOKEN = os.environ['guaguaTOKEN']
+#guaTOKEN = os.environ['guaguaTOKEN']
 
 
 currentUrl = ""
@@ -120,7 +120,7 @@ class bot(commands.Cog):
   @commands.command()
   async def pause(self,ctx):
     data = scrape(currentUrl)
-    pauseembed=discord.Embed(title="Track Paused",description=data)
+    pauseembed=discord.Embed(title="Track Paused",description=data.get["title"])
     await ctx.message.add_reaction("⏸")
     await ctx.send(embed=pauseembed)  
     ctx.voice_client.pause() 
@@ -129,8 +129,8 @@ class bot(commands.Cog):
   #resumes the current stream of audio and sends message alerting user
   @commands.command()
   async def resume(self,ctx):
-    
-    resumeembed=discord.Embed(title="Track Resumed",description= "")
+    data = scrape(currentUrl)
+    resumeembed=discord.Embed(title="Track Resumed",description= data.get["title"])
     await ctx.message.add_reaction("⏯")
     await ctx.send(embed=resumeembed)
     ctx.voice_client.resume()    
@@ -153,18 +153,35 @@ class bot(commands.Cog):
     guild_id = ctx.message.guild.id
     if len(queues[guild_id]) != songIndex:
       #creates a temp list that holds all the songs that are coming up in the queue
-      tempL = []
+      tempLSources = []
+      tempLUrls = []
       tempIndex = songIndex
       print(queues[guild_id])
       while tempIndex != len(queues[guild_id]):
-        tempL.append(queues[guild_id][tempIndex])
+        tempLSources.append(queues[guild_id][tempIndex])
+        tempLUrls.append(urls[guild_id][tempIndex])
         tempIndex+=1
-      #shuffles our temp list
-      random.shuffle(tempL)
+      #shuffles our temp lists
+      i = tempLSources.lenght-1
+      while i>0:
+        index = random.nextInt(i+1)
+        temp = tempLSources[index]
+        tempLSources[index] = tempLSources[i]
+        tempLSources[i] = temp
+
+        temp = tempLUrls[index]
+        tempLUrls[index]=tempLUrls[i]
+        tempLUrls[i] = temp
+        i-=1
       #replaces elements in our current queue playing with our now shuffled temp list of our queue
       tempIndex = songIndex
-      for i in tempL:
-        queues[guild_id][tempIndex]=i
+      for j in tempLSources:
+        queues[guild_id][tempIndex]=j
+        tempIndex+=1
+
+      tempIndex = songIndex
+      for k in tempLUrls:
+        urls[guild_id][tempIndex]=k
         tempIndex+=1
       await ctx.message.add_reaction("🔀")
       await ctx.send("The queue has been shuffled!")
@@ -176,11 +193,14 @@ class bot(commands.Cog):
   @commands.command()
   async def lyrics(self,ctx):
     data = scrape(currentUrl)
-
-    search_term = data['title'][len(data['title'])-1]
-    html = urllib.request.urlopen("https://genius.com/search?q="+search_term)
-    video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
-    url = "https://www.youtube.com/watch?v="+video_ids[0]
+    print(data)
+    search_term = data['title']
+    search_term = search_term.replace(" ","_").replace("(","").replace(")","").replace(".","").replace(",","").replace("Official_Video","")
+    print("https://www.genius.com/search?q="+search_term)
+    html = BeautifulSoup(requests.get("https://www.genius.com/search?q="+search_term).text, "html.parser")
+    genius_id = html.find_all("td",{"class":"tal qx"})
+    print(genius_id[0])
+    url = "https://www.youtube.com/watch?v="
     
 
 #helper function that goes through the queue one song after another
