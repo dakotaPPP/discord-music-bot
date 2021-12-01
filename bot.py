@@ -60,37 +60,42 @@ class bot(commands.Cog):
     ydl_cfg = {"format":"bestaudio"}
 
     guild_id = ctx.message.guild.id
+    try:
+      if url.startswith("file"):
+        print(ctx.message.attachments[0].url)
+        
+      if not url.startswith("https://"):
+        #downloads youtube html page, looks through html content to look for video links so can add to queue
+        url = url.replace(" ","_")
+        html = urllib.request.urlopen("https://www.youtube.com/results?search_query="+url)
+        video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+        url = "https://www.youtube.com/watch?v="+video_ids[0]
 
-    if not url.startswith("https://"):
-      #downloads youtube html page, looks through html content to look for video links so can add to queue
-      url = url.replace(" ","_")
-      html = urllib.request.urlopen("https://www.youtube.com/results?search_query="+url)
-      video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
-      url = "https://www.youtube.com/watch?v="+video_ids[0]
+      with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
+          info = ydl.extract_info(url, download=False)
+          url2 = info["formats"][0]["url"]
+          #creates FFmpeg stream for the audio
+          source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_cfg)
+          #adds our url into urls dictionary corresponding to guild_id
+          if guild_id in urls:
+            urls[guild_id].append(url)
+          else:
+            urls[guild_id] = [url]
 
-    #adds reaction to message sent by user to show that the bot acknowledges their request
-       
-    await ctx.message.add_reaction("▶")
-    await ctx.send(f"`{url}` added to queue!")
-    
-    with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
-        info = ydl.extract_info(url, download=False)
-        url2 = info["formats"][0]["url"]
-        #creates FFmpeg stream for the audio
-        source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_cfg)
-
-        #adds our url into urls dictionary corresponding to guild_id
-        if guild_id in urls:
-          urls[guild_id].append(url)
-        else:
-          urls[guild_id] = [url]
-
-        #adds our FFmpeg stream of audio into queues dictionary corresponding to guild_id
-        if guild_id in queues:
-          queues[guild_id].append(source)
-        else:
-          queues[guild_id] = [source]
-        check_queue(ctx, guild_id)    
+          #adds our FFmpeg stream of audio into queues dictionary corresponding to guild_id
+          if guild_id in queues:
+            queues[guild_id].append(source)
+          else:
+            queues[guild_id] = [source]
+          check_queue(ctx, guild_id)  
+      #adds reaction to message sent by user to show that the bot acknowledges their request
+      await ctx.message.add_reaction("▶")
+      data = scrape(urls[guild_id][len(urls[guild_id])-1])
+      playembed=discord.Embed(title="Now Playing",description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][len(urls[guild_id])-1],ctx.message.author.id),color=0xac45bd)      
+      await ctx.send(embed = playembed)  
+    except:
+      await ctx.send("Error adding song to queue")
+      await ctx.message.add_reaction("🖕")
   
   #remove a track from a specified index in the queue
   @commands.command()
@@ -108,10 +113,19 @@ class bot(commands.Cog):
   #view the current queue
   @commands.command()
   async def queue(self,ctx):
+    queuetitles = []
+    tempI = songIndex
     guild_id = ctx.message.guild.id
     if len(queues[guild_id]) != songIndex:
       await ctx.message.add_reaction("👍")
-      await ctx.send(f"Your queue is now `{queues[guild_id]}`")
+      while tempI < len(urls[guild_id]):
+        data = scrape(urls[guild_id][tempI])
+        queuetitles.append(data.get("title"))
+        tempI+=1
+
+      queueembed=discord.Embed(title="Queue",description= queuetitles,color=0xac45bd) 
+      await ctx.send(embed = queueembed)
+
     else: 
       await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
@@ -120,7 +134,7 @@ class bot(commands.Cog):
   @commands.command()
   async def pause(self,ctx):
     data = scrape(currentUrl)
-    pauseembed=discord.Embed(title="Track Paused",description=data.get["title"])
+    pauseembed=discord.Embed(title="Track Paused",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
     await ctx.message.add_reaction("⏸")
     await ctx.send(embed=pauseembed)  
     ctx.voice_client.pause() 
@@ -130,7 +144,7 @@ class bot(commands.Cog):
   @commands.command()
   async def resume(self,ctx):
     data = scrape(currentUrl)
-    resumeembed=discord.Embed(title="Track Resumed",description= data.get["title"])
+    resumeembed=discord.Embed(title="Track Resumed",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
     await ctx.message.add_reaction("⏯")
     await ctx.send(embed=resumeembed)
     ctx.voice_client.resume()    
@@ -141,12 +155,19 @@ class bot(commands.Cog):
     if ctx.voice_client and ctx.voice_client.is_playing():
       ctx.voice_client.stop()
       await ctx.message.add_reaction("⏭")
-      skipembed=discord.Embed(title="Track Skipped",description= "")
+      data = scrape(currentUrl)
+      skipembed=discord.Embed(title="Track Skipped",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
       await ctx.send(embed=skipembed)
     else:
       await ctx.message.add_reaction("🖕")
       nosongembed=discord.Embed(title="No Song Found",description= "There are currently no songs in queue!")
       await ctx.send(embed=nosongembed)
+
+  @commands.command()
+  async def help(self,ctx):
+    helpembed=discord.Embed(title="Command Menu",description="",color=0xac45bd)
+    await ctx.send(embed=helpembed)
+
 
   @commands.command()
   async def shuffle(self,ctx):
@@ -197,9 +218,10 @@ class bot(commands.Cog):
     search_term = data['title']
     search_term = search_term.replace(" ","_").replace("(","").replace(")","").replace(".","").replace(",","").replace("Official_Video","")
     print("https://www.genius.com/search?q="+search_term)
-    html = BeautifulSoup(requests.get("https://www.genius.com/search?q="+search_term).text, "html.parser")
-    genius_id = html.find_all("td",{"class":"tal qx"})
-    print(genius_id[0])
+    #html = BeautifulSoup(requests.get("https://www.genius.com/search?q="+search_term).text, "html.parser")
+    html = urllib.request.urlopen("https://www.genius.com/search?q="+search_term)
+    genius_id = html.find_all("a")
+    print(genius_id)
     url = "https://www.youtube.com/watch?v="
     
 
