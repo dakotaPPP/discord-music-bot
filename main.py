@@ -8,19 +8,11 @@ BOTTOKEN = os.environ['BOTTOKEN']
 cogs = [bot]
 
 #initializes the bot
-client = commands.Bot(command_prefix="-", intents = discord.Intents.all())
+client = commands.Bot(command_prefix="-", intents = discord.Intents.all(), help_command=None)
+client.remove_command('help')
       
 #sets up our cogs for the client
 for i in range(len(cogs)):
   cogs[i].setup(client)
-
-
-#testing embeds
-@client.command()
-async def embed(ctx):
-  embed=discord.Embed(title="Test")
-
-  await ctx.send(embed=embed)
-
 
 client.run(BOTTOKEN)

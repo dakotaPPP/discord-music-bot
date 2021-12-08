@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import requests
 import urllib.parse, urllib.request, re
 import random
+from datetime import datetime
 #guaTOKEN = os.environ['guaguaTOKEN']
 
 
@@ -12,8 +13,8 @@ currentUrl = ""
 songIndex = 0
 queues = {}
 urls = {}
-          
-    
+isPaused = False
+            
 class bot(commands.Cog):
   def __init__(self, client): 
     self.client = client
@@ -43,9 +44,12 @@ class bot(commands.Cog):
     #adds songs to the queue 
   @commands.command()
   async def play(self,ctx,url:str):
+    global isPaused
     #if the person calling the -join function isn't in a call
     if ctx.author.voice is None:
-      await ctx.send("You are not in a VC, please connect to a VC to use bot")
+      errorembed=discord.Embed(title="Error",description='You are not in a VC, please connect to a VC to use bot',color=0xac45bd, timestamp=datetime.utcnow())
+      errorembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
+      await ctx.send(embed=errorembed)
     vc = ctx.author.voice.channel
     #if bot is not in a vc
     if ctx.voice_client is None:
@@ -60,42 +64,49 @@ class bot(commands.Cog):
     ydl_cfg = {"format":"bestaudio"}
 
     guild_id = ctx.message.guild.id
-    try:
-      if url.startswith("file"):
-        print(ctx.message.attachments[0].url)
-        
-      if not url.startswith("https://"):
-        #downloads youtube html page, looks through html content to look for video links so can add to queue
-        url = url.replace(" ","_")
-        html = urllib.request.urlopen("https://www.youtube.com/results?search_query="+url)
-        video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
-        url = "https://www.youtube.com/watch?v="+video_ids[0]
+    #try:
 
-      with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
-          info = ydl.extract_info(url, download=False)
-          url2 = info["formats"][0]["url"]
-          #creates FFmpeg stream for the audio
-          source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_cfg)
-          #adds our url into urls dictionary corresponding to guild_id
-          if guild_id in urls:
-            urls[guild_id].append(url)
-          else:
-            urls[guild_id] = [url]
+    title = "Now Playing"
+    if ctx.voice_client.is_playing() or isPaused:
+      title = "Added To Queue"
+    
+    if url.startswith("file"):
+      url = ctx.message.attachments[0].url
+      
+    if not url.startswith("https://"):
+      #downloads youtube html page, looks through html content to look for video links so can add to queue
+      url = url.replace(" ","_")
+      html = urllib.request.urlopen("https://www.youtube.com/results?search_query="+url)
+      video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+      url = "https://www.youtube.com/watch?v="+video_ids[0]
 
-          #adds our FFmpeg stream of audio into queues dictionary corresponding to guild_id
-          if guild_id in queues:
-            queues[guild_id].append(source)
-          else:
-            queues[guild_id] = [source]
-          check_queue(ctx, guild_id)  
-      #adds reaction to message sent by user to show that the bot acknowledges their request
-      await ctx.message.add_reaction("▶")
-      data = scrape(urls[guild_id][len(urls[guild_id])-1])
-      playembed=discord.Embed(title="Now Playing",description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][len(urls[guild_id])-1],ctx.message.author.id),color=0xac45bd)      
-      await ctx.send(embed = playembed)  
-    except:
-      await ctx.send("Error adding song to queue")
-      await ctx.message.add_reaction("🖕")
+    with youtube_dl.YoutubeDL(ydl_cfg) as ydl:
+        info = ydl.extract_info(url, download=False)
+        url2 = info["formats"][0]["url"]
+        #creates FFmpeg stream for the audio
+        source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_cfg)
+        #adds our url into urls dictionary corresponding to guild_id
+        if guild_id in urls:
+          urls[guild_id].append(url)
+        else:
+          urls[guild_id] = [url]
+
+        #adds our FFmpeg stream of audio into queues dictionary corresponding to guild_id
+        if guild_id in queues:
+          queues[guild_id].append(source)
+        else:
+          queues[guild_id] = [source]
+        check_queue(ctx, guild_id)  
+        isPaused = False
+    #adds reaction to message sent by user to show that the bot acknowledges their request
+    await ctx.message.add_reaction("▶")
+    data = scrape(urls[guild_id][len(urls[guild_id])-1])
+    playembed=discord.Embed(title=title,description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][len(urls[guild_id])-1],ctx.message.author.id),color=0xac45bd, timestamp=datetime.utcnow())     
+    playembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80") 
+    await ctx.send(embed = playembed)  
+    #except:
+      #await ctx.send("Error adding song to queue")
+      #await ctx.message.add_reaction("🖕")
   
   #remove a track from a specified index in the queue
   @commands.command()
@@ -112,60 +123,87 @@ class bot(commands.Cog):
   
   #view the current queue
   @commands.command()
-  async def queue(self,ctx):
-    queuetitles = []
-    tempI = songIndex
-    guild_id = ctx.message.guild.id
-    if len(queues[guild_id]) != songIndex:
-      await ctx.message.add_reaction("👍")
-      while tempI < len(urls[guild_id]):
-        data = scrape(urls[guild_id][tempI])
-        queuetitles.append(data.get("title"))
-        tempI+=1
-
-      queueembed=discord.Embed(title="Queue",description= queuetitles,color=0xac45bd) 
-      await ctx.send(embed = queueembed)
-
-    else: 
+  async def queue(self,ctx,*page):
+    try:
+      pageNum = 0
+      if len(page)==0:
+        pageNum = 0
+      else:
+        pageNum = (int(page[0])-1)*10
+      guild_id = ctx.message.guild.id
+      description = ""
+      tempI = songIndex + pageNum
+      showIndex = 1 + pageNum
+      guild_id = ctx.message.guild.id
+      if len(queues[guild_id]) != songIndex:
+        data = scrape(urls[guild_id][songIndex-1])
+        description+="**Now Playing:** \n[{}]({})\n\n**⬇️Up Next:⬇️**".format(data.get("title"),urls[guild_id][songIndex-1])
+        await ctx.message.add_reaction("👍")
+        while tempI < len(urls[guild_id]) and showIndex<11:
+          data = scrape(urls[guild_id][tempI])
+          description+='\n`{}.` [{}]({})'.format(showIndex,data.get("title"),urls[guild_id][tempI])
+          tempI+=1
+          showIndex+=1
+        description+="\n\n**{} songs in queue\n**Page 1/{}".format(len(urls[guild_id])-songIndex,1+int(len(urls[guild_id])/10))
+          
+        queueembed=discord.Embed(title="Queue",description=description,color=0xac45bd, timestamp=datetime.utcnow()) 
+        queueembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
+        await ctx.send(embed = queueembed)
+      else: 
+        await ctx.message.add_reaction("🖕")
+        await ctx.send("The queue is empty! Add some tracks!")
+    except:
       await ctx.message.add_reaction("🖕")
-      await ctx.send("The queue is empty! Add some tracks!")
+      await ctx.send("**Invalid page number!!**")
 
   #pauses the current stream of audio and sends message alerting user
   @commands.command()
   async def pause(self,ctx):
-    data = scrape(currentUrl)
-    pauseembed=discord.Embed(title="Track Paused",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
+    global isPaused
+    guild_id = ctx.message.guild.id
+    data = scrape(urls[guild_id][songIndex-1])
+    pauseembed=discord.Embed(title="Track Paused",description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][songIndex-1],ctx.message.author.id),color=0xac45bd, timestamp=datetime.utcnow())
+    pauseembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
     await ctx.message.add_reaction("⏸")
-    await ctx.send(embed=pauseembed)  
+    await ctx.send(embed=pauseembed)
+    isPaused = True
     ctx.voice_client.pause() 
       
 
   #resumes the current stream of audio and sends message alerting user
   @commands.command()
   async def resume(self,ctx):
-    data = scrape(currentUrl)
-    resumeembed=discord.Embed(title="Track Resumed",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
+    global isPaused
+    guild_id = ctx.message.guild.id
+    data = scrape(urls[guild_id][songIndex-1])
+    resumeembed=discord.Embed(title="Track Resumed",description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][songIndex-1],ctx.message.author.id),color=0xac45bd, timestamp=datetime.utcnow())
+    resumeembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
     await ctx.message.add_reaction("⏯")
     await ctx.send(embed=resumeembed)
+    isPaused = False
     ctx.voice_client.resume()    
 
   #skips the current song playing
   @commands.command()
   async def skip(self,ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
+    guild_id = ctx.message.guild.id
+    if ctx.voice_client and (ctx.voice_client.is_playing() or isPaused):
       ctx.voice_client.stop()
       await ctx.message.add_reaction("⏭")
-      data = scrape(currentUrl)
-      skipembed=discord.Embed(title="Track Skipped",description='[{}]({}) [<@{}>]'.format(data.get("title"),currentUrl,ctx.message.author.id),color=0xac45bd)
+      data = scrape(urls[guild_id][songIndex-1])
+      skipembed=discord.Embed(title="**Track Skipped,** Now Playing",description='[{}]({}) [<@{}>]'.format(data.get("title"),urls[guild_id][songIndex-1],ctx.message.author.id),color=0xac45bd, timestamp=datetime.utcnow())
+      skipembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
       await ctx.send(embed=skipembed)
     else:
       await ctx.message.add_reaction("🖕")
-      nosongembed=discord.Embed(title="No Song Found",description= "There are currently no songs in queue!")
+      nosongembed=discord.Embed(title="No Song Found",description= "There are currently no songs in queue!",color=0xac45bd, timestamp=datetime.utcnow())
+      nosongembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
       await ctx.send(embed=nosongembed)
 
   @commands.command()
   async def help(self,ctx):
-    helpembed=discord.Embed(title="Command Menu",description="",color=0xac45bd)
+    helpembed=discord.Embed(title="Command Menu",description="`-play` Play songs and add to queue, input is keywords or links \n `-pause` Pause current song \n `-resume` Resume current song \n `-skip` Skip current song \n `-queue` View queued songs \n `-remove` Remove songs from queue, input is index of queue \n `-shuffle` Shuffle queue \n `-dc` Disconnect Bot \n `-stop` Another way to Disconnect Bot \n \n Currently guagua2 only supports Soundcloud and Youtube, made by taevion#9279 and blum#0001",color=0xac45bd, timestamp=datetime.utcnow())
+    helpembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
     await ctx.send(embed=helpembed)
 
 
@@ -183,7 +221,7 @@ class bot(commands.Cog):
         tempLUrls.append(urls[guild_id][tempIndex])
         tempIndex+=1
       #shuffles our temp lists
-      i = tempLSources.lenght-1
+      i = len(tempLSources)-1
       while i>0:
         index = random.nextInt(i+1)
         temp = tempLSources[index]
@@ -196,21 +234,24 @@ class bot(commands.Cog):
         i-=1
       #replaces elements in our current queue playing with our now shuffled temp list of our queue
       tempIndex = songIndex
-      for j in tempLSources:
-        queues[guild_id][tempIndex]=j
+      for j in range(len(tempLSources)):
+        queues[guild_id][tempIndex]=tempLSources[j]
+        urls[guild_id][tempIndex]=tempLUrls[j]
         tempIndex+=1
-
-      tempIndex = songIndex
-      for k in tempLUrls:
-        urls[guild_id][tempIndex]=k
-        tempIndex+=1
+      
       await ctx.message.add_reaction("🔀")
-      await ctx.send("The queue has been shuffled!")
+      shuffleembed=discord.Embed(title="Queue Shuffled",description='The queue has been shuffled!',color=0xac45bd, timestamp=datetime.utcnow())
+      shuffleembed.set_footer(text='guagua2', icon_url= "https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
+      await ctx.send(embed=shuffleembed)
       print(queues[guild_id])
     else: 
       await ctx.message.add_reaction("🖕")
       await ctx.send("The queue is empty! Add some tracks!")
+      shuffleeerrorembed=discord.Embed(title="Queue Empty",description='The queue is empty! Add some tracks!',color=0xac45bd, timestamp=datetime.utcnow())
+      shuffleeerrorembed.set_footer(text='guagua2', icon_url="https://cdn.discordapp.com/avatars/900794325590474753/3c28066bb4f2855bddd254d8516aa149.png?size=80")
+      await ctx.send(embed=shuffleeerrorembed)
 
+  """
   @commands.command()
   async def lyrics(self,ctx):
     data = scrape(currentUrl)
@@ -222,7 +263,8 @@ class bot(commands.Cog):
     html = urllib.request.urlopen("https://www.genius.com/search?q="+search_term)
     genius_id = html.find_all("a")
     print(genius_id)
-    url = "https://www.youtube.com/watch?v="
+    url = "https://www.youtube.com/watch?v=" 
+  """
     
 
 #helper function that goes through the queue one song after another
@@ -232,7 +274,7 @@ def check_queue(ctx,id):
     try:
       if songIndex != (len(queues[id])):
         source = queues[id][songIndex]
-        currentUrl = urls[id][songIndex]
+        currentUrl = urls[id][songIndex-1]
         #streams the FFmpeg stream to the bot's current vc
         ctx.voice_client.play(source, after=lambda x=None: check_queue(ctx, id))
         songIndex+=1
@@ -244,12 +286,13 @@ def check_queue(ctx,id):
 
 def scrape(url):
   r = BeautifulSoup(requests.get(url).text, "html.parser")
-  title = r.select_one('meta[itemprop="name"][content]')['content']
+  if url.startswith("https://soundcloud"):
+    title = r.select_one('meta[name="description"][content]')['content']
+    title = title[7:len(title)-76]
+  else:
+    title = r.select_one('meta[itemprop="name"][content]')['content']
   data = {'title':title}
   return data
   
-
-
-
 def setup(client):
   client.add_cog(bot(client))
