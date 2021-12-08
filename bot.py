@@ -7,8 +7,6 @@ import urllib.parse, urllib.request, re
 import time
 import random
 from datetime import datetime
-#guaTOKEN = os.environ['guaguaTOKEN']
-
 
 currentUrl = ""
 songIndex = 0
